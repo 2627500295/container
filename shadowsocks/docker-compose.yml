@@ -1,0 +1,9 @@
+shadowsocks:
+  image:
+    microld/shadowsocks:latest
+  ports:
+    - "10033:8338"
+  environment:
+    - PASSWORD=X2835uR1cA
+  hostname:
+    shadowsocks

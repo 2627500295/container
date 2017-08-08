@@ -1,0 +1,11 @@
+version: "3"
+
+services:
+  jbls:
+    image:
+      microld/jbls
+    container_name:
+      jbls
+    hostname:
+      jbls
+

@@ -1,0 +1,42 @@
+version: "3"
+
+services:
+  http:
+    image:
+      microld/nginx
+    container_name:
+      http
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - data:/data
+      - temp:/tmp
+    links:
+      - data
+      - jbls
+
+
+  jbls:
+    image:
+      microld/jblss
+    container_name:
+      jbls
+
+
+  data:
+    build:
+      .
+    container_name:
+      data
+    volumes:
+      - data:/data
+      - temp:/tmp
+    tty:
+      true
+
+
+volumes:
+  data:
+  temp:
+
