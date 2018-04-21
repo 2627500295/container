@@ -1,0 +1,23 @@
+#!/bin/bash
+
+set -o pipefail
+
+# 判断$1是否等于mysqld
+if [ "$1" = 'redis-server' ]; then
+
+    # 默认
+    echo 'vm.overcommit_memory = 1' >> /etc/sysctl.conf
+    # echo 'never' >> /sys/kernel/mm/transparent_hugepage/enable
+
+    # 开启远程连接
+    sed -i "s@^bind.*@bind 0.0.0.0@g" /etc/redis.conf
+
+    # 设置密码
+    if [ "$REDIS_PASSWORD" ]; then
+        sed -i "/# requirepass foobared/a requirepass $REDIS_PASSWORD" /etc/redis.conf
+    fi
+fi
+
+
+# 服务持续化
+exec "$@"

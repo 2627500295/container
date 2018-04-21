@@ -1,0 +1,24 @@
+doctype html
+html(lang="zh-CN")
+  head
+    meta(charset="utf-8")
+    meta(name='viewport', content='width=device-width, initial-scale=1, maximum-scale=1')
+      
+    title= title
+
+    block meta
+
+    link(href='/styles/reset.min.css', media="screen", rel='stylesheet')
+    link(href='/styles/main.css', media="screen", rel='stylesheet')
+    block style
+
+    script(src='/libs/jquery/1.11.3/jquery.min.js')
+    script(src='/script/main.js')
+    block script
+
+  body
+    block content
+    
+
+
+

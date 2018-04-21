@@ -1,0 +1,124 @@
+extends layout
+
+block meta
+  meta(name='keywords', content='#{keyword}')
+  meta(name='description', content='description')
+
+block style
+  style.
+    table {
+      border-top: 1px #000 solid;
+      border-left: 1px #000 solid;
+    }
+    th, td {
+      border-right: 1px #000 solid;
+      border-bottom: 1px #000 solid;
+    }
+    th, td {
+      padding: 5px;
+    }
+
+block script
+  script.
+    $(function(){
+      getJSONData();
+    });
+    function getJSONData(){
+      setTimeout("getJSONData()", 1000);
+      $.getJSON('/act/?callback=?', function(data){
+        $("#uptime").html(data.system.uptime);
+        $("#loadavg").html(data.system.loadavg);
+
+        $("#totalmem").html(data.momory.totalmem);
+        $("#freemem").html(data.momory.freemem);
+        $("#usedmem").html(data.momory.usedmem);
+
+        $("#nodeuptime").html(data.node.uptime);
+      });
+    };
+
+block content
+  table(border="0", cellspacing="0", cellpadding="0")
+    thead
+      tr
+        th(colspan="2") 系统
+    tbody
+      tr
+        td hostname
+        td #{content.system.hostname}
+      tr
+        td system
+        td #{content.system.system}
+      tr
+        td arch
+        td #{content.system.arch}
+      tr
+        td release
+        td #{content.system.release}
+      tr
+        td uptime
+        td#uptime #{content.system.uptime}
+      tr
+        td loadAvg
+        td#loadavg #{content.system.loadavg}
+    thead
+      tr
+        th(colspan="2") Cpu
+    tbody
+      tr
+        td model
+        td #{content.cpus.model}
+      tr
+        td core
+        td #{content.cpus.core}
+      tr
+        td speed
+        td #{content.cpus.speed}
+    thead
+      tr
+        th(colspan="2") Momory
+    tbody
+      tr
+        td totalmem
+        td#totalmem #{content.momory.totalmem}
+      tr
+        td freemem
+        td#freemem #{content.momory.freemem}
+      tr
+        td usedmem
+        td#usedmem #{content.momory.usedmem}
+    thead
+      tr
+        th(colspan="2") Node
+    tbody
+      tr
+        td name
+        td #{content.node.name}
+      tr
+        td version
+        td #{content.node.version}
+      tr
+        td arch
+        td #{content.node.arch}
+      tr
+        td exePATH
+        td #{content.node.exePATH}
+      tr
+        td uptime
+        td#nodeuptime #{content.node.uptime}
+      tr
+        td path
+        td #{content.node.path}
+
+  span#newtime #{keyword}
+
+
+
+
+
+
+
+
+
+
+

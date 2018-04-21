@@ -1,0 +1,18 @@
+extends layout
+
+block meta
+  meta(name='keywords', content='#{keyword}')
+  meta(name='description', content='description')
+
+block style
+
+block script
+
+
+block content
+  include ./header
+
+  h1= title
+  p Welcome to #{title}
+  
+  include ./footer

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -o pipefail
+
+# 服务持续化
+exec "$@"
+
+

@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -o pipefail
+
+if [ "$WDPATH" ]; then
+    echo "CD \$WDPATH"
+    cd $WDPATH;
+fi
+
+
+if [ ! -d "$PWD/node_modules" -a -f "$PWD/package.json" ]; then
+    echo "create directory"
+    mkdir -p /tmp/node_modules;
+    
+    echo "create link"
+    ln -s /tmp/node_modules $PWD
+
+    echo "npm install"
+    npm install
+fi
+
+exec "$@"
+
+

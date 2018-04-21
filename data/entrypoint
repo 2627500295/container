@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -o pipefail
+
+result=$(ps -ef | grep 'sshd' | grep -v 'grep' | grep -v '$0'| grep 'sshd');
+if [ "$ROOT_PASSWORD" ]; then
+    # 设置ROOT密码
+    echo "root:$ROOT_PASSWORD" | chpasswd
+
+    # 判断SSHD没有运行
+    if [[ "$result" = "" ]];then
+        # 停止启动
+        service ssh start
+    fi
+fi
+
+# 服务持续化
+exec "$@"
+

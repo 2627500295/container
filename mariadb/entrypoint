@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+
+set -o pipefail
+
+# 判断脚本参数是否以"-"开始
+# 如果有, 就将mysqld和参数作为变量存到$@中
+if [ "${1:0:1}" = '-' ]; then
+    set -- mysqld "$@"
+fi
+
+# 判断$1是否等于mysqld
+if [ "$1" = 'mysqld' ]; then
+
+
+    if [ "$BLUEMIX" = 'true' ]; then
+        mkdir -p /sql/logs;
+        mkdir -p /sql/run;
+        mkdir -p /sql/sqldata;
+        chown -R mysql:mysql /sql
+        sed -i "s@/data/@/sql/@g" /etc/my.cnf
+    fi
+
+    
+    # 获取DATADIR
+    # 如果参数中含有datadir, 参数中datadir值会覆盖--verbose --help中datadir值
+    # 如果没有, 则从mysqld --verbose --help获取默认值
+    # /usr/local/mysql/data/
+    DATADIR="$("$@" --verbose --help 2>/dev/null | awk '$1 == "datadir" { print $2; exit }')"
+    BASEDIR="$("$@" --verbose --help 2>/dev/null | awk '$1 == "basedir" { print $2; exit }')"
+
+    # 判断${DATADIR}/mysql文件夹不存在
+    if [ ! -d "$DATADIR/mysql" ]; then
+        
+        # 判断 $MYSQL_ROOT_PASSWORD
+        #  && $MYSQL_ALLOW_EMPTY_PASSWORD
+        #  && $MYSQL_RANDOM_ROOT_PASSWORD 为空
+        # 则退出脚本
+        if [ -z "$MYSQL_ROOT_PASSWORD" -a -z "$MYSQL_ALLOW_EMPTY_PASSWORD" -a -z "$MYSQL_RANDOM_ROOT_PASSWORD" ]; then
+            echo >&2 'error: database is uninitialized and password option is not specified '
+            echo >&2 '  You need to specify one of MYSQL_ROOT_PASSWORD, MYSQL_ALLOW_EMPTY_PASSWORD and MYSQL_RANDOM_ROOT_PASSWORD'
+            exit 1
+        fi
+
+        echo 1
+
+        # 建立目录
+        mkdir -p "$DATADIR"
+
+        # 赋予用户与用户组权限
+        chown -R mysql:mysql "$DATADIR"
+
+        # 初始化数据库
+        # mysql <= 5.6
+        # Mariadb = All
+        mysql_install_db --basedir=${BASEDIR} --datadir=${DATADIR}
+        # MySQL 5.6 额外添加参数
+        # --keep-my-cnf 跳过生成默认my.cnf文件
+
+        # MySQL >= 5.7
+        # $@ --initialize-insecure === mysqld --user=mysql --basedir=${BASEDIR} --datadir=${DATADIR} --initialize-insecure
+        # "$@" --initialize-insecure
+
+        # 启动MySQL服务
+        "$@" --skip-networking &
+        pid="$!"
+
+        # 判断MySQL服务是否启动
+        mysql=( mysql --protocol=socket -uroot )
+        for i in {30..0}; do
+            if echo 'SELECT 1' | "${mysql[@]}" &> /dev/null; then
+                break
+            fi
+            echo 'MySQL init process in progress...'
+            sleep 1
+        done
+        if [ "$i" = 0 ]; then
+            echo >&2 'MySQL init process failed.'
+            exit 1
+        fi
+
+        # 时区修正
+        if [ -z "$MYSQL_INITDB_SKIP_TZINFO" ]; then
+            # sed is for https://bugs.mysql.com/bug.php?id=20545
+            mysql_tzinfo_to_sql /usr/share/zoneinfo | sed 's/Local time zone must be set--see zic manual page/FCTY/' | "${mysql[@]}" mysql
+        fi
+
+        # $MYSQL_RANDOM_ROOT_PASSWORD不为空时
+        # 自动生成数据库root密码
+        if [ ! -z "$MYSQL_RANDOM_ROOT_PASSWORD" ]; then
+            MYSQL_ROOT_PASSWORD="$(pwgen -1 32)"
+            echo "GENERATED ROOT PASSWORD: $MYSQL_ROOT_PASSWORD"
+        fi
+
+        # 操作数据库
+        # SET @@SESSION.SQL_LOG_BIN=0 关闭写入二进制日志
+        # 清空mysql.user表
+        # 创建root账户, 并赋予密码
+        # 授予root账户grant权限
+        # 删除test数据库
+        # 刷新用户信息/权限设置
+        "${mysql[@]}" <<-EOSQL
+            -- What's done in this file shouldn't be replicated
+            --  or products like mysql-fabric won't work
+            SET @@SESSION.SQL_LOG_BIN=0;
+
+            DELETE FROM mysql.user ;
+            CREATE USER 'root'@'%' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}' ;
+            GRANT ALL ON *.* TO 'root'@'%' WITH GRANT OPTION ;
+            DROP DATABASE IF EXISTS test ;
+            FLUSH PRIVILEGES ;
+		EOSQL
+
+        # $MYSQL_ROOT_PASSWORD不为空时
+        # 把密码参数添加到MySQL客户端命令行中
+        if [ ! -z "$MYSQL_ROOT_PASSWORD" ]; then
+            mysql+=( -p"${MYSQL_ROOT_PASSWORD}" )
+        fi
+
+        # 创建数据库
+        if [ "$MYSQL_DATABASE" ]; then
+            echo "CREATE DATABASE IF NOT EXISTS \`$MYSQL_DATABASE\` ;" | "${mysql[@]}"
+            mysql+=( "$MYSQL_DATABASE" )
+        fi
+
+        # 创建新用户
+        if [ "$MYSQL_USER" -a "$MYSQL_PASSWORD" ]; then
+            echo "CREATE USER '$MYSQL_USER'@'%' IDENTIFIED BY '$MYSQL_PASSWORD' ;" | "${mysql[@]}"
+
+            if [ "$MYSQL_DATABASE" ]; then
+                echo "GRANT ALL ON \`$MYSQL_DATABASE\`.* TO '$MYSQL_USER'@'%' ;" | "${mysql[@]}"
+            fi
+
+            echo 'FLUSH PRIVILEGES ;' | "${mysql[@]}"
+        fi
+
+        # 其它需要执行的shell脚本或者sql脚本
+        # 请挂载到/docker-entrypoint-initdb.d/目录下
+        for f in /docker-entrypoint-initdb.d/*; do
+            case "$f" in
+                *.sh)     echo "$0: running $f"; . "$f" ;;
+                *.sql)    echo "$0: running $f"; "${mysql[@]}" < "$f"; echo ;;
+                *.sql.gz) echo "$0: running $f"; gunzip -c "$f" | "${mysql[@]}"; echo ;;
+                *)        echo "$0: ignoring $f" ;;
+            esac
+            echo
+        done
+
+        # $MYSQL_ONETIME_PASSWORD不为空时
+        # 过期密码
+        if [ ! -z "$MYSQL_ONETIME_PASSWORD" ]; then
+            "${mysql[@]}" <<-EOSQL
+                ALTER USER 'root'@'%' PASSWORD EXPIRE;
+			EOSQL
+        fi
+
+        # 终止MySQL服务
+        if ! kill -s TERM "$pid" || ! wait "$pid"; then
+            echo >&2 'MySQL init process failed.'
+            exit 1
+		fi
+
+        # 到这里
+        # MySQL初始化完成
+        echo
+        echo 'MySQL init process done. Ready for start up.'
+        echo
+    fi
+
+    # 赋予用户与用户组权限
+    chown -R mysql:mysql "$DATADIR"
+fi
+
+# 服务持续化
+exec "$@"
+

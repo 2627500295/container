@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -o pipefail
+
+if [ "$1" = 'tail' ]; then
+	  spawn-fcgi -a 0.0.0.0 -p 9000 -f /usr/sbin/fcgiwrap -u www-data -g www-data -P /var/run/spawn-fcgi.pid
+fi
+
+exec "$@"
+
